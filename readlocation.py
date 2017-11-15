@@ -90,9 +90,8 @@ for j in range(0, len(records)):
     lon = shapes[j].points[0][0]
     lat = shapes[j].points[0][1]
     locationsByName[name] = [lat, lon]
-allLocationsDF = pandas.DataFrame.from_dict(locationsByName)
 
-
+#Read in the files with data and create corresponing pandas tables
 flowTable = pandas.read_csv('dataNDW/A57AccidentFrits_intensiteit_00001.csv')
 speedTable = pandas.read_csv('dataNDW/A57AccidentFrits_snelheid_00001.csv')
 #print getIntensity(flowTable, 'RWS01_MONIBAS_0020vwm0558ra', '2015-12-31 23:45:00');
@@ -100,23 +99,22 @@ speedTable = pandas.read_csv('dataNDW/A57AccidentFrits_snelheid_00001.csv')
 
 locations = speedTable.measurementSiteReference.unique()
 dates = speedTable.periodStart.unique()
+
+#create dictionary with mapping road number and side (i.e., north/south bound) and flag
 roadsTab = speedTable.drop_duplicates(['ROADNUMBER', 'measurementSide'])
 roadsTab = roadsTab[['ROADNUMBER','measurementSide']].dropna()
-#roadIdDict = {}
 roadsTab = roadsTab.apply(lambda x: '-'.join(x), axis=1)
 roadsTab=roadsTab.reset_index()
 roadsTab=roadsTab.drop("index",1)
 seriesRoad=roadsTab.ix[:,0]
 roadIdDict=seriesRoad.to_dict()
-print len(locations)
-print len(dates)
+#print len(locations)
+#print len(dates)
 reverseDict = {v: k for k, v in roadIdDict.iteritems()}
-#test= tableWithRoadID.roadNameKNMI.map(reverseDict)
 
 
-##netcdf stuff
-fileOutName = "ndw_speed_intensityA57Accident.nc"
-
+##netcdf part initialization
+fileOutName = "TESTndw_speed_intensityA57Accident.nc"
 latvar = []
 lonvar = []
 timevardata = []
@@ -125,6 +123,8 @@ flowvar = []
 speedvar = []
 station = np.array([], dtype='object')
 ###
+
+#extract locations and filter the ones available in the measurements and the current measurement infrastructure (shape file)
 locationsCorrected = locations
 
 for loc in locations:
@@ -133,20 +133,16 @@ for loc in locations:
         latvar.append(locationsByName[loc][0])
         lonvar.append(locationsByName[loc][1])
     except KeyError, e:
-        print 'Error:', e
+        print 'Error: old station no more available for measurements', e
         #removing locations that are in the data set but NOT in the current shapefile (old locations that have been
         # removed from the current measurement locations)
         index = np.argwhere(locationsCorrected == loc)
         locationsCorrected = np.delete(locationsCorrected, index)
-        #locationsCorrected = locationsCorrected.drop(locationsCorrected[locationsCorrected. < 50].index)
         continue
     station = np.append(station, loc)
     roadIdvarData.append(getRoadId(timeandtypespeed,loc,reverseDict))
 
-
-
-
-
+#extract flow and speed information and time and put into arrays to fill netcdf variables
 for timeVariable in dates:  # Note localtime used , not UTC
     inputdate = timeVariable + 'CEST'
     date = dateutil.parser.parse(inputdate)  # ,"%Y-%m-%d %M:%H:%S")
@@ -157,36 +153,10 @@ for timeVariable in dates:  # Note localtime used , not UTC
     #loc = 'RWS01_MONIBAS_0020vwm0558ra'
         timeandtypespeed = speedTable.loc[(speedTable.measurementSiteReference == loc)]
         timeandtypeflow = flowTable.loc[(flowTable.measurementSiteReference == loc)]
-        # latvar.append(locationsByName[loc][0])
-        # lonvar.append(locationsByName[loc][1])
-        # station = np.append(station, loc)
-        # roadIdvar.append(getRoadId(timeandtypespeed,loc,reverseDict))
-        # measurements ={}
-
-
-        #measurements[loc]={}
-        #measurements[loc]['lat'] = locationsByName[loc][0]
-        #measurements[loc]['lon'] = locationsByName[loc][1]
-        #measurements[loc]['time'] = timeVariable
-        #measurements[loc]['speed'] = getSpeed(timeandtypespeed,loc,timeVariable)
-        #measurements[loc]['flow'] = getIntensity(timeandtypeflow, loc, timeVariable)
         speedvar.append(getSpeed(timeandtypespeed,loc,timeVariable))
         flowvar.append(getIntensity(timeandtypeflow, loc, timeVariable))
-        #measurements[loc]['roadId'] = getRoadId(timeandtypespeed,loc,reverseDict)
 
-        #for loc in measurements:
-            #latvar.append(measurements[loc]['lat'])
-            #lonvar.append(measurements[loc]['lon'])
-            # inputdate = measurements[loc]['time'] + 'CEST'
-            # date = dateutil.parser.parse(inputdate)  # ,"%Y-%m-%d %M:%H:%S")
-            # utctimestring = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.mktime(date.timetuple())))
-            # netcdfDate = netCDF4.date2num(dateutil.parser.parse(utctimestring), "seconds since 1970-01-01 00:00:00")
-            # timevardata.append(netcdfDate)
-            # station = np.append(station, loc)
-            # roadIdvar.append(measurements[loc]['roadId'])
-            # speedvar.append(measurements[loc]['speed'])
-            # flowvar.append(measurements[loc]['flow'])
-
+#create netcdf variables
 numpoints = len(station)
 timeSteps = len(timevardata)
 
@@ -222,39 +192,22 @@ flowVar = ncfile.createVariable('flow', 'd', ('station', 'time'))
 
 speedVar = ncfile.createVariable('speed', 'd', ('station', 'time'))
 
-
-
-
-
+#fill netcdf variables
 lat[:] = [latvar]
 lon[:] = [lonvar]
 timevar[:] = [timevardata]
-
 floatVar[:] = station
 roadIdvar[:] = [roadIdvarData]
-
 flowVar[:] = [flowvar]
 speedVar[:] = [speedvar]
 
+#netcdf stuff for header
 ncfile.featureType = "timeSeries";
 ncfile.Conventions = "CF-1.4";
 ncfile.close()
 
 
-
-
-
-
-#     print time, loc, locationsByName[loc], getIntensity(timeandtypeflow, loc, time), getSpeed(timeandtypespeed, loc, time), getRoadId(timeandtypeflow,loc,reverseDict)
-# measurements = {}
-# measurements['RWS01_MONIBAS_0020vwm0558ra'] = {}
-# measurements['RWS01_MONIBAS_0020vwm0558ra']['lon'] = 5
-# measurements['RWS01_MONIBAS_0020vwm0558ra']['lat'] = 52
-# measurements['RWS01_MONIBAS_0020vwm0558ra']['time'] = '2015-12-31 23:45:00'
-# measurements['RWS01_MONIBAS_0020vwm0558ra']['speed'] = 52
-# measurements['RWS01_MONIBAS_0020vwm0558ra']['flow'] = 52
-# measurements['RWS01_MONIBAS_0020vwm0558ra']['roadId'] = 1
-## Write NetCDF ##
+#Example netcdf file similar to the one written
 """
 netcdf Amsterdam20170314 {
 dimensions:
