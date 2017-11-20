@@ -92,12 +92,15 @@ for j in range(0, len(records)):
     locationsByName[name] = [lat, lon]
 
 #Read in the files with data and create corresponing pandas tables
-flowTable = pandas.read_csv('dataNDW/A57AccidentFrits_intensiteit_00001.csv')
-speedTable = pandas.read_csv('dataNDW/A57AccidentFrits_snelheid_00001.csv')
+flowTable = pandas.read_csv('dataNDW/accident20151230_intensiteit_00001.csv')
+speedTable = pandas.read_csv('dataNDW/accident20151230_snelheid_00001.csv')
 #print getIntensity(flowTable, 'RWS01_MONIBAS_0020vwm0558ra', '2015-12-31 23:45:00');
 #print getSpeed(speedTable, 'RWS01_MONIBAS_0020vwm0558ra', '2015-12-31 23:45:00');
 
-locations = speedTable.measurementSiteReference.unique()
+speedTable.sort_values(['startLocatieForDisplayLat','startLocatieForDisplayLong'])
+
+locations = speedTable.sort_values(['measurementSide','startLocatieForDisplayLat','startLocatieForDisplayLong']).measurementSiteReference.unique()
+print(locations)
 dates = speedTable.periodStart.unique()
 
 #create dictionary with mapping road number and side (i.e., north/south bound) and flag
@@ -114,7 +117,7 @@ reverseDict = {v: k for k, v in roadIdDict.iteritems()}
 
 
 ##netcdf part initialization
-fileOutName = "TESTndw_speed_intensityA57Accident.nc"
+fileOutName = "ndw_speed_intensityA2.nc"
 latvar = []
 lonvar = []
 timevardata = []
@@ -127,11 +130,14 @@ station = np.array([], dtype='object')
 #extract locations and filter the ones available in the measurements and the current measurement infrastructure (shape file)
 locationsCorrected = locations
 
+
+
+
 for loc in locations:
     timeandtypespeed = speedTable.loc[(speedTable.measurementSiteReference == loc)]
     try:
-        latvar.append(locationsByName[loc][0])
-        lonvar.append(locationsByName[loc][1])
+        latTemp = locationsByName[loc][0]
+        lonTemp = locationsByName[loc][1]
     except KeyError, e:
         print 'Error: old station no more available for measurements', e
         #removing locations that are in the data set but NOT in the current shapefile (old locations that have been
@@ -139,8 +145,15 @@ for loc in locations:
         index = np.argwhere(locationsCorrected == loc)
         locationsCorrected = np.delete(locationsCorrected, index)
         continue
-    station = np.append(station, loc)
-    roadIdvarData.append(getRoadId(timeandtypespeed,loc,reverseDict))
+    roadIdTemp = getRoadId(timeandtypespeed,loc,reverseDict)
+    if (roadIdTemp !=9999):
+        latvar.append(latTemp)
+        lonvar.append(lonTemp)
+        roadIdvarData.append(roadIdTemp)
+        station = np.append(station, loc)
+    else:
+        index = np.argwhere(locationsCorrected == loc)
+        locationsCorrected = np.delete(locationsCorrected, index)
 
 #extract flow and speed information and time and put into arrays to fill netcdf variables
 for timeVariable in dates:  # Note localtime used , not UTC
