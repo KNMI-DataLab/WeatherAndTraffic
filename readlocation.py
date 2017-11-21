@@ -168,7 +168,7 @@ for loc in locations:
         locationsCorrected = np.delete(locationsCorrected, index)
 
 #extract flow and speed information and time and put into arrays to fill netcdf variables
-for timeVariable in dates[30:60]:  # Note localtime used , not UTC
+for timeVariable in dates:  # Note localtime used , not UTC
     inputdate = timeVariable + 'CEST'
     date = dateutil.parser.parse(inputdate)  # ,"%Y-%m-%d %M:%H:%S")
     utctimestring = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.mktime(date.timetuple())))
