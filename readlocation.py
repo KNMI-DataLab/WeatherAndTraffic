@@ -80,7 +80,7 @@ def getRoadId(table,location,reverseDictRoad):
 
 
 
-# Make a map of locations with their coords
+# Make a map of locations with their coords #added the info of highway and hectometer
 sf = shapefile.Reader("Telpunten_20170926.shp")
 records = sf.records()
 shapes = sf.shapes()
@@ -89,17 +89,29 @@ for j in range(0, len(records)):
     name = records[j][2]
     lon = shapes[j].points[0][0]
     lat = shapes[j].points[0][1]
-    locationsByName[name] = [lat, lon]
+    highway = records[j][1]
+    #currently only the MONIBAS type is supported to extract the hectometer
+    if("MONIBAS" in name):
+        hm = int(name[-6:-2])
+        locationsByName[name] = [lat, lon, highway, hm]
+
+dictLocations = pandas.DataFrame.from_dict(locationsByName, orient='index')
+
+dictLocations.columns = ["lat", "lon", "highway", "hm"]
+
 
 #Read in the files with data and create corresponing pandas tables
-flowTable = pandas.read_csv('dataNDW/accident20151230_intensiteit_00001.csv')
-speedTable = pandas.read_csv('dataNDW/accident20151230_snelheid_00001.csv')
+flowTable = pandas.read_csv('dataNDW/A1ApeldoornAccident_intensiteit_00001.csv')
+speedTable = pandas.read_csv('dataNDW/A1ApeldoornAccident_snelheid_00001.csv')
 #print getIntensity(flowTable, 'RWS01_MONIBAS_0020vwm0558ra', '2015-12-31 23:45:00');
 #print getSpeed(speedTable, 'RWS01_MONIBAS_0020vwm0558ra', '2015-12-31 23:45:00');
 
-speedTable.sort_values(['startLocatieForDisplayLat','startLocatieForDisplayLong'])
+#speedTable.sort_values(['startLocatieForDisplayLat','startLocatieForDisplayLong'])
 
-locations = speedTable.sort_values(['measurementSide','startLocatieForDisplayLat','startLocatieForDisplayLong']).measurementSiteReference.unique()
+merged = pandas.merge(speedTable,dictLocations,left_on="measurementSiteReference", right_index=True)
+
+#ordering of the measurment points by highway, road-side and hectometer to have them in the way Adaguc wants
+locations = merged.sort_values(['highway','measurementSide','hm']).measurementSiteReference.unique()
 print(locations)
 dates = speedTable.periodStart.unique()
 
@@ -117,7 +129,7 @@ reverseDict = {v: k for k, v in roadIdDict.iteritems()}
 
 
 ##netcdf part initialization
-fileOutName = "ndw_speed_intensityA2.nc"
+fileOutName = "ndw_speed_intensityA1.nc"
 latvar = []
 lonvar = []
 timevardata = []
@@ -156,7 +168,7 @@ for loc in locations:
         locationsCorrected = np.delete(locationsCorrected, index)
 
 #extract flow and speed information and time and put into arrays to fill netcdf variables
-for timeVariable in dates:  # Note localtime used , not UTC
+for timeVariable in dates[30:60]:  # Note localtime used , not UTC
     inputdate = timeVariable + 'CEST'
     date = dateutil.parser.parse(inputdate)  # ,"%Y-%m-%d %M:%H:%S")
     utctimestring = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.mktime(date.timetuple())))
